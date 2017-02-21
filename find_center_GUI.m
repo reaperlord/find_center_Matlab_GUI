@@ -22,7 +22,7 @@ function varargout = find_center_GUI(varargin)
 
 % Edit the above text to modify the response to help find_center_GUI
 
-% Last Modified by GUIDE v2.5 21-Feb-2017 18:28:01
+% Last Modified by GUIDE v2.5 21-Feb-2017 23:56:24
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -57,7 +57,7 @@ function find_center_GUI_OpeningFcn(hObject, eventdata, handles, varargin)
 
 for ii=1:length(varargin)
         
-    [noRow,noCol]=size(varargin{ii});
+    [noRow,noCol]=size(varargin{ii});    
     
     if isnumeric(varargin{ii})&&(noRow>1)&&(noCol>1)
         handles.input.image=varargin{ii};
@@ -74,11 +74,14 @@ hold;
 
 %getting no of image pixels
 [noOfRow,noOfCol]=size(get(handles.image.base,'CData'));
+handles.image.size=[noOfRow,noOfCol];
 
 %make red field
-handles.image.red = image(cat(3, ones(noOfRow,noOfCol,'logical'), zeros(noOfRow,noOfCol,'logical'), zeros(noOfRow,noOfCol,'logical')));
+handles.image.loSelect=zeros(noOfRow,noOfCol,'logical'); 
+handles.image.red = image(cat(3, handles.image.loSelect, zeros(noOfRow,noOfCol,'logical'), zeros(noOfRow,noOfCol,'logical')));
+set(handles.image.red,'HitTest','off');
 handles.image.red.AlphaDataMapping = 'direct'; 
-handles.image.red.AlphaData = 35;
+handles.image.red.AlphaData = 35*handles.image.loSelect;
 
 %new red image
 
@@ -109,11 +112,15 @@ function lo_vis_cBox_Callback(hObject, eventdata, handles)
 % hObject    handle to lo_vis_cBox (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+
+handles.image.red.AlphaData = 35 * get(hObject,'Value')*handles.image.loSelect;
+%{
 if get(hObject,'Value') == get(hObject,'Min')
     handles.image.red.AlphaData = 0;
 elseif get(hObject,'Value') == get(hObject,'Max')
     handles.image.red.AlphaData = 35;
 end
+%}
 % Hint: get(hObject,'Value') returns toggle state of lo_vis_cBox
 
 
@@ -383,3 +390,52 @@ set(hObject,'String', num2str(sqrt(0.5),3));
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+
+
+% --- Executes on mouse press over axes background.
+function axes1_ButtonDownFcn(hObject, eventdata, handles)
+% hObject    handle to axes1 (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+tagCell={'lo_select_but','lo_deselect_but','hi_select_but','hi_deselect_but','star_select_but','star_deselect_but'};
+jj=0;
+% figures out which button is currently pressed
+for ii=1:6
+    
+    eval(['H=handles.' tagCell{ii} ';']); 
+
+    if get(H,'Value') %if it is 1
+        jj=ii; break;
+    elseif (ii==6)&&(jj==0) %if no button is pressed
+        return; %end func
+    end
+end
+
+
+CP= get(handles.axes1,'CurrentPoint');
+
+   X_CP= CP(1,1);
+   Y_CP= CP(1,2);
+
+   pixel_selection_delta=str2double(get(handles.pix_sel_rad,'String'));
+    
+   
+pixelsWithInRad = findCirclePixels( handles.image.size, [Y_CP,X_CP], 0, pixel_selection_delta); 
+
+
+for kk=1:size(pixelsWithInRad,1)
+    if jj<3 %select low selec mask
+        handles.image.loSelect( pixelsWithInRad(kk,1), pixelsWithInRad(kk,2) ) = logical(mod(jj,2));
+    end
+end
+
+guidata(handles.figure1,handles)
+ 
+noOfRow=handles.image.size(1);
+noOfCol=handles.image.size(2);
+
+if jj<3 %select low selec mask
+set(handles.image.red,'CData', cat(3, handles.image.loSelect, zeros(noOfRow,noOfCol,'logical'), zeros(noOfRow,noOfCol,'logical')) );
+handles.image.red.AlphaData = 35 * get(handles.lo_vis_cBox,'Value')*handles.image.loSelect;
+end
+
