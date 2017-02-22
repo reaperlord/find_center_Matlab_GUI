@@ -22,7 +22,7 @@ function varargout = find_center_GUI(varargin)
 
 % Edit the above text to modify the response to help find_center_GUI
 
-% Last Modified by GUIDE v2.5 21-Feb-2017 23:56:24
+% Last Modified by GUIDE v2.5 22-Feb-2017 16:21:09
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -46,6 +46,8 @@ end
 % End initialization code - DO NOT EDIT
 
 
+addpath('auxiliary_functions\');
+
 % --- Executes just before find_center_GUI is made visible.
 function find_center_GUI_OpeningFcn(hObject, eventdata, handles, varargin)
 % This function has no output args, see OutputFcn.
@@ -54,34 +56,51 @@ function find_center_GUI_OpeningFcn(hObject, eventdata, handles, varargin)
 % handles    structure with handles and user data (see GUIDATA)
 % varargin   command line arguments to find_center_GUI (see VARARGIN)
 
+handles.input.image=struct([]);
+%handles.input.image=evalin('base', 'F.*B');
 
 for ii=1:length(varargin)
         
     [noRow,noCol]=size(varargin{ii});    
     
     if isnumeric(varargin{ii})&&(noRow>1)&&(noCol>1)
-        handles.input.image=varargin{ii};
+        handles.input.image=varargin{ii};    
     end
 end
 
-if exist('handles.input.image')
+%hold; not necessary cause of nextplotproperty=add
+
+if not(isempty(handles.input.image))
    handles.image.base=imagesc(handles.axes1, handles.input.image);axis square;colormap gray;
 else
     handles.image.base=imagesc(handles.axes1);axis square;colormap gray;
 end
 
-hold;
+set(handles.image.base,'HitTest','off');
+
 
 %getting no of image pixels
 [noOfRow,noOfCol]=size(get(handles.image.base,'CData'));
 handles.image.size=[noOfRow,noOfCol];
 
-%make red field
+%resetting axis limits
+set(handles.axes1,'XLim',[1, noOfCol]); xlim manual;
+set(handles.axes1,'YLim',[1, noOfRow]); ylim manual;
+
+%make blue/low field
 handles.image.loSelect=zeros(noOfRow,noOfCol,'logical'); 
-handles.image.red = image(cat(3, handles.image.loSelect, zeros(noOfRow,noOfCol,'logical'), zeros(noOfRow,noOfCol,'logical')));
-set(handles.image.red,'HitTest','off');
-handles.image.red.AlphaDataMapping = 'direct'; 
-handles.image.red.AlphaData = 35*handles.image.loSelect;
+handles.image.blue = image(cat(3, zeros(noOfRow,noOfCol,'logical'), zeros(noOfRow,noOfCol,'logical'), handles.image.loSelect));
+set(handles.image.blue,'HitTest','off');
+handles.image.blue.AlphaDataMapping = 'direct'; 
+handles.image.blue.AlphaData = 35*handles.image.loSelect;
+
+%make magenta/hi field
+handles.image.hiSelect=zeros(noOfRow,noOfCol,'logical'); 
+handles.image.magenta = image(cat(3, handles.image.hiSelect, zeros(noOfRow,noOfCol,'logical'), handles.image.hiSelect));
+set(handles.image.magenta,'HitTest','off');
+handles.image.magenta.AlphaDataMapping = 'direct'; 
+handles.image.magenta.AlphaData = 35*handles.image.hiSelect;
+
 
 %new red image
 
@@ -113,7 +132,7 @@ function lo_vis_cBox_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-handles.image.red.AlphaData = 35 * get(hObject,'Value')*handles.image.loSelect;
+handles.image.blue.AlphaData = 35 * get(hObject,'Value')*handles.image.loSelect;
 %{
 if get(hObject,'Value') == get(hObject,'Min')
     handles.image.red.AlphaData = 0;
@@ -253,7 +272,7 @@ function hi_vis_cBox_Callback(hObject, eventdata, handles)
 % hObject    handle to hi_vis_cBox (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-
+handles.image.magenta.AlphaData = 35 * get(hObject,'Value')*handles.image.hiSelect;
 % Hint: get(hObject,'Value') returns toggle state of hi_vis_cBox
 
 
@@ -333,18 +352,8 @@ function figure1_WindowButtonMotionFcn(hObject, eventdata, handles)
 % hObject    handle to figure1 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-  
- CP= get(handles.figure1,'CurrentPoint');
-
-   X_CP= CP(1,1);
-   Y_CP= CP(1,2);
- 
- axesPosition= get(handles.axes1,'Position');  
-
- if (X_CP>axesPosition(1)) &&(X_CP<axesPosition(1)+axesPosition(3))&&...
-         (Y_CP>axesPosition(2))&&(X_CP<axesPosition(2)+axesPosition(4))
-    
-cursor_coordinate_UpdateFcn(handles.cursor_coordinate, eventdata, handles);
+  if (isAboveImage(handles))    
+    cursor_coordinate_UpdateFcn(handles.cursor_coordinate, eventdata, handles);
  end
 %}
 % CP= get(handles.axes1,'CurrentPoint');
@@ -397,6 +406,11 @@ function axes1_ButtonDownFcn(hObject, eventdata, handles)
 % hObject    handle to axes1 (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+
+if not(isAboveImage(handles))
+    return;
+end
+
 tagCell={'lo_select_but','lo_deselect_but','hi_select_but','hi_deselect_but','star_select_but','star_deselect_but'};
 jj=0;
 % figures out which button is currently pressed
@@ -426,6 +440,8 @@ pixelsWithInRad = findCirclePixels( handles.image.size, [Y_CP,X_CP], 0, pixel_se
 for kk=1:size(pixelsWithInRad,1)
     if jj<3 %select low selec mask
         handles.image.loSelect( pixelsWithInRad(kk,1), pixelsWithInRad(kk,2) ) = logical(mod(jj,2));
+    elseif jj<5 %select hi selec mask
+        handles.image.hiSelect( pixelsWithInRad(kk,1), pixelsWithInRad(kk,2) ) = logical(mod(jj,2));
     end
 end
 
@@ -435,7 +451,14 @@ noOfRow=handles.image.size(1);
 noOfCol=handles.image.size(2);
 
 if jj<3 %select low selec mask
-set(handles.image.red,'CData', cat(3, handles.image.loSelect, zeros(noOfRow,noOfCol,'logical'), zeros(noOfRow,noOfCol,'logical')) );
-handles.image.red.AlphaData = 35 * get(handles.lo_vis_cBox,'Value')*handles.image.loSelect;
+    set(handles.image.blue,'CData', cat(3, zeros(noOfRow,noOfCol,'logical'), zeros(noOfRow,noOfCol,'logical'), handles.image.loSelect) );
+    handles.image.blue.AlphaData = 35 * get(handles.lo_vis_cBox,'Value')*handles.image.loSelect;
+elseif jj<5 %select hi selec mask
+    set(handles.image.magenta,'CData', cat(3, handles.image.hiSelect, zeros(noOfRow,noOfCol,'logical'), handles.image.hiSelect) );
+    handles.image.magenta.AlphaData = 35 * get(handles.hi_vis_cBox,'Value')*handles.image.hiSelect;
+elseif jj<7 %selec star mask
+    ;
 end
 
+
+     
