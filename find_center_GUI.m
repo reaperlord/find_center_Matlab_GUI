@@ -101,6 +101,14 @@ set(handles.image.magenta,'HitTest','off');
 handles.image.magenta.AlphaDataMapping = 'direct'; 
 handles.image.magenta.AlphaData = 35*handles.image.hiSelect;
 
+%make yellow/star field
+handles.image.starSelect=zeros(noOfRow,noOfCol,'logical'); 
+handles.image.yellow = image(cat(3, handles.image.starSelect, handles.image.starSelect, zeros(noOfRow,noOfCol,'logical')));
+set(handles.image.yellow,'HitTest','off');
+handles.image.yellow.AlphaDataMapping = 'direct'; 
+handles.image.yellow.AlphaData = 35*handles.image.starSelect;
+
+
 
 %new red image
 
@@ -281,7 +289,7 @@ function star_vis_cBox_Callback(hObject, eventdata, handles)
 % hObject    handle to star_vis_cBox (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-
+handles.image.yellow.AlphaData = 35 * get(hObject,'Value')*handles.image.starSelect;
 % Hint: get(hObject,'Value') returns toggle state of star_vis_cBox
 
 
@@ -353,7 +361,8 @@ function figure1_WindowButtonMotionFcn(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
   if (isAboveImage(handles))    
-    cursor_coordinate_UpdateFcn(handles.cursor_coordinate, eventdata, handles);
+    cursor_coordinate_AND_Val_UpdateFcn(handles.cursor_coordinate, eventdata, handles);
+    %cursor_value_UpdateFcn(handles)
  end
 %}
 % CP= get(handles.axes1,'CurrentPoint');
@@ -366,7 +375,7 @@ function figure1_WindowButtonMotionFcn(hObject, eventdata, handles)
    %set(handles.cursor_coordinate,'String',coordString);
    
    
-function cursor_coordinate_UpdateFcn(hObject, eventdata, handles)
+function cursor_coordinate_AND_Val_UpdateFcn(hObject, eventdata, handles)
 
  CP= get(handles.axes1,'CurrentPoint');
 
@@ -376,8 +385,11 @@ function cursor_coordinate_UpdateFcn(hObject, eventdata, handles)
    coordString= ['[ ' num2str(round(X_CP*100)/100) ', ' num2str(round(Y_CP*100)/100) ' ]'];
    
    set(handles.cursor_coordinate,'String',coordString);
-
-
+   
+   %get img val=
+   currentVal=handles.image.base.CData(round(Y_CP),round(X_CP));
+   valString =  num2str(currentVal);
+   set(handles.cursor_val,'String',valString); 
 
 function pix_sel_rad_Callback(hObject, eventdata, handles)
 % hObject    handle to pix_sel_rad (see GCBO)
@@ -442,6 +454,8 @@ for kk=1:size(pixelsWithInRad,1)
         handles.image.loSelect( pixelsWithInRad(kk,1), pixelsWithInRad(kk,2) ) = logical(mod(jj,2));
     elseif jj<5 %select hi selec mask
         handles.image.hiSelect( pixelsWithInRad(kk,1), pixelsWithInRad(kk,2) ) = logical(mod(jj,2));
+    elseif jj<7 %select star selec mask
+        handles.image.starSelect( pixelsWithInRad(kk,1), pixelsWithInRad(kk,2) ) = logical(mod(jj,2));
     end
 end
 
@@ -453,12 +467,75 @@ noOfCol=handles.image.size(2);
 if jj<3 %select low selec mask
     set(handles.image.blue,'CData', cat(3, zeros(noOfRow,noOfCol,'logical'), zeros(noOfRow,noOfCol,'logical'), handles.image.loSelect) );
     handles.image.blue.AlphaData = 35 * get(handles.lo_vis_cBox,'Value')*handles.image.loSelect;
+    
+    %call mean_std_update
+    mean_std_update_fcn(handles, 'lo'); 
+    
 elseif jj<5 %select hi selec mask
     set(handles.image.magenta,'CData', cat(3, handles.image.hiSelect, zeros(noOfRow,noOfCol,'logical'), handles.image.hiSelect) );
     handles.image.magenta.AlphaData = 35 * get(handles.hi_vis_cBox,'Value')*handles.image.hiSelect;
+    
+    %call mean_std_update
+    mean_std_update_fcn(handles, 'hi');  
+    
 elseif jj<7 %selec star mask
-    ;
+    set(handles.image.yellow,'CData', cat(3, handles.image.starSelect, handles.image.starSelect, zeros(noOfRow,noOfCol,'logical')) );
+    handles.image.yellow.AlphaData = 35 * get(handles.star_vis_cBox,'Value')*handles.image.starSelect;  
 end
+
+function mean_std_update_fcn(handles, lo_hi_Str)
+
+if strcmp(lo_hi_Str,'lo')
+    maskMatrix=handles.image.loSelect;
+elseif  strcmp(lo_hi_Str,'hi')
+    maskMatrix=handles.image.hiSelect;
+else
+    error('Second variable: lo_hi_Str does not contain a valid value');
+end
+
+%go through lo/hi select matrix and if its a one, read out value of
+%image.base and add to a vector
+noOfRow=handles.image.size(1);
+noOfCol=handles.image.size(2);
+
+selIndex=0;
+selectionVec=[];
+
+for yy=1:noOfRow
+    for xx=1:noOfCol
+        
+        if maskMatrix(yy,xx)==true
+            selIndex=selIndex+1;
+            selectionVec(selIndex)=handles.image.base.CData(yy,xx);
+        end
+        
+    end
+end
+
+meanVal=mean(selectionVec);
+stdVal=std(selectionVec);
+
+if strcmp(lo_hi_Str,'lo')
+    set(handles.lo_mean,'String',num2str(meanVal));
+    set(handles.lo_std,'String',num2str(stdVal));
+    handles.calculated.lo_mean=meanVal;
+    handles.calculated.lo_std=stdVal;
+elseif  strcmp(lo_hi_Str,'hi')
+    set(handles.hi_mean,'String',num2str(meanVal));
+    set(handles.hi_std,'String',num2str(stdVal));
+    handles.calculated.hi_mean=meanVal;
+    handles.calculated.hi_std=stdVal;
+else
+    error('Second variable: lo_hi_Str does not contain a valid value');
+end
+
+guidata(handles.figure1,handles);    
+%get mean and std and enter in appropriate field
+%
+%put mean and std in appropriate textbox
+%
+%update gui
+
 
 
      
