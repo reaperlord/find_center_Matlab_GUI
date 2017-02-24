@@ -22,7 +22,7 @@ function varargout = find_center_GUI(varargin)
 
 % Edit the above text to modify the response to help find_center_GUI
 
-% Last Modified by GUIDE v2.5 22-Feb-2017 16:21:09
+% Last Modified by GUIDE v2.5 23-Feb-2017 15:10:36
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -110,8 +110,19 @@ handles.image.yellow.AlphaData = 35*handles.image.starSelect;
 
 
 
-%new red image
+%initialize userinput
 
+handles.userInput.thresholdStr='threshold';
+handles.userInput.thresh_percentStr='30';
+
+%initialize calculated
+handles.calculated.lo_mean=NaN;
+handles.calculated.lo_std=NaN;
+handles.calculated.hi_mean=NaN;
+handles.calculated.hi_std=NaN;
+handles.calculated.thresh=NaN;
+handles.calculated.xCenter=NaN;
+handles.calculated.yCenter=NaN;
 
 % Choose default command line output for find_center_GUI
 handles.output = hObject;
@@ -228,7 +239,12 @@ function enter_threshold_Callback(hObject, eventdata, handles)
 % hObject    handle to enter_threshold (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-
+if isnan(str2double(hObject.String))
+    hObject.String=handles.userInput.thresh_percentStr;
+else
+    handles.userInput.thresholdStr=hObject.String;
+    guidata(handles.figure1,handles);
+end
 % Hints: get(hObject,'String') returns contents of enter_threshold as text
 %        str2double(get(hObject,'String')) returns contents of enter_threshold as a double
 
@@ -262,6 +278,8 @@ function hi_pass_rad_but_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 set(handles.hi_pass_rad_but,'Value', get(handles.hi_pass_rad_but,'Max')); 
 set(handles.lo_pass_rad_but,'Value', get(handles.lo_pass_rad_but,'Min'));
+
+handles.lo_hi_hi_lo_text.String='% of low to high';
 % Hint: get(hObject,'Value') returns toggle state of hi_pass_rad_but
 
 % --- Executes on button press in lo_pass_rad_but.
@@ -271,6 +289,8 @@ function lo_pass_rad_but_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 set(handles.hi_pass_rad_but,'Value', get(handles.hi_pass_rad_but,'Min'))
 set(handles.lo_pass_rad_but,'Value', get(handles.lo_pass_rad_but,'Max'));
+
+handles.lo_hi_hi_lo_text.String='% of high to low';
 % Hint: get(hObject,'Value') returns toggle state of lo_pass_rad_but
 
 
@@ -333,9 +353,16 @@ but_deselection_fct(hObject,handles);
 
 % --- Executes on button press in find_center_but.
 function find_center_but_Callback(hObject, eventdata, handles)
-% hObject    handle to find_center_but (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
+
+
+[xCenter,yCenter] = findGeomCenter_GUIVer(handles);
+
+handles.calculated.xCenter=xCenter;
+handles.calculated.yCenter=yCenter;
+
+handles.center_disp_text.String=['[' num2str(round(xCenter*100)/100) ',' num2str(round(yCenter*100)/100) ']'];
+
+guidata(handles.figure1,handles);
 
 
 
@@ -539,3 +566,91 @@ guidata(handles.figure1,handles);
 
 
      
+
+
+% --- Executes on button press in thresh_calc_but.
+function thresh_calc_but_Callback(hObject, eventdata, handles)
+% hObject    handle to thresh_calc_but (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+thresh_percent=str2double(handles.userInput.thresh_percentStr);
+
+lo_hi_dif=handles.calculated.hi_mean-handles.calculated.lo_mean;
+
+if get(handles.hi_pass_rad_but,'Value')
+    calc_thresh= handles.calculated.lo_mean + (lo_hi_dif*thresh_percent/100);
+elseif get(handles.lo_pass_rad_but,'Value')
+    calc_thresh= handles.calculated.hi_mean - (lo_hi_dif*thresh_percent/100);
+else
+    return;
+end
+
+handles.calculated.thresh=calc_thresh;
+guidata(handles.figure1,handles);
+
+sel_calc_thresh_Callback(handles.sel_calc_thresh, eventdata, handles);
+
+ 
+
+
+% Hint: get(hObject,'Value') returns toggle state of thresh_calc_but
+
+
+% --- Executes on button press in sel_calc_thresh.
+function sel_calc_thresh_Callback(hObject, eventdata, handles)
+% hObject    handle to sel_calc_thresh (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+set(handles.sel_calc_thresh,'Value',1);
+set(handles.sel_user_thresh,'Value',0);
+set(handles.enter_threshold, 'Enable', 'inactive');
+set(handles.enter_threshold, 'String', num2str(handles.calculated.thresh));
+
+% Hint: get(hObject,'Value') returns toggle state of sel_calc_thresh
+
+
+% --- Executes on button press in sel_user_thresh.
+function sel_user_thresh_Callback(hObject, eventdata, handles)
+% hObject    handle to sel_user_thresh (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+set(handles.sel_user_thresh,'Value',1);
+set(handles.sel_calc_thresh,'Value',0);
+set(handles.enter_threshold, 'Enable', 'on');
+set(handles.enter_threshold, 'String', handles.userInput.thresholdStr);
+% Hint: get(hObject,'Value') returns toggle state of sel_user_thresh
+
+
+
+function enter_thresh_percent_Callback(hObject, eventdata, handles)
+% hObject    handle to enter_thresh_percent (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+input=get(hObject,'String');
+
+inputNum=str2double(input);
+
+if isnan(inputNum)
+    set(hObject,'String',handles.userInput.thresh_percentStr);
+    return;
+else
+    handles.userInput.thresh_percentStr=input;
+    guidata(handles.figure1,handles);
+end
+
+    
+% Hints: get(hObject,'String') returns contents of enter_thresh_percent as text
+%        str2double(get(hObject,'String')) returns contents of enter_thresh_percent as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function enter_thresh_percent_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to enter_thresh_percent (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
