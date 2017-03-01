@@ -20,15 +20,19 @@
 function outputMatrix = findCirclePixels( SizeOfImageData, centerPoint, radius, delta)
 
 %[yyMax xxMax] = size(ImageData);
-
+    
 index =0;
+
+
+
+outputMatrix=NaN(ceil(4*delta*delta),2);
 
 for (xx=1:SizeOfImageData(1,1))
     for (yy= 1:SizeOfImageData(1,2))
         
         currentPos = [yy, xx];
         
-        if ( abs((norm(currentPos - centerPoint) -radius )) < delta )
+        if ( abs((norm(currentPos - centerPoint) -radius )) <= delta )
             % if the pixel is within the distance delta of the
             % circumference
             index = 1+ index;

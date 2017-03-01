@@ -22,7 +22,7 @@ function varargout = find_center_GUI(varargin)
 
 % Edit the above text to modify the response to help find_center_GUI
 
-% Last Modified by GUIDE v2.5 23-Feb-2017 15:10:36
+% Last Modified by GUIDE v2.5 01-Mar-2017 11:41:02
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -107,6 +107,13 @@ handles.image.yellow = image(cat(3, handles.image.starSelect, handles.image.star
 set(handles.image.yellow,'HitTest','off');
 handles.image.yellow.AlphaDataMapping = 'direct'; 
 handles.image.yellow.AlphaData = 35*handles.image.starSelect;
+
+%make cyan/current selection field
+handles.image.currentSelect=zeros(noOfRow,noOfCol,'logical'); 
+handles.image.cyan = image(cat(3, zeros(noOfRow,noOfCol,'logical'), handles.image.currentSelect,handles.image.currentSelect ));
+set(handles.image.cyan,'HitTest','off');
+handles.image.cyan.AlphaDataMapping = 'direct'; 
+handles.image.cyan.AlphaData = handles.image.currentSelect;
 
 
 
@@ -245,6 +252,8 @@ else
     handles.userInput.thresholdStr=hObject.String;
     guidata(handles.figure1,handles);
 end
+
+update_thresh_lo_hi_to_sigma_text(handles)
 % Hints: get(hObject,'String') returns contents of enter_threshold as text
 %        str2double(get(hObject,'String')) returns contents of enter_threshold as a double
 
@@ -357,14 +366,37 @@ function find_center_but_Callback(hObject, eventdata, handles)
 
 [xCenter,yCenter] = findGeomCenter_GUIVer(handles);
 
+
+
 handles.calculated.xCenter=xCenter;
 handles.calculated.yCenter=yCenter;
 
 handles.center_disp_text.String=['[' num2str(round(xCenter*100)/100) ',' num2str(round(yCenter*100)/100) ']'];
 
+    
+
+
+%should an impoint be created to display center?
+status = license('test','Image_Toolbox');
+
+if status %check whether show center is switched on?
+    if handles.show_center_chkBox.Value
+        if isfield(handles, 'centerPoint')
+            %setPosition(handles.centerPoint, [xCenter, yCenter]);
+            fcn=myPositionConstraint(handles);
+            handles.centerPoint.setPositionConstraintFcn(fcn);
+            handles.centerPoint.setPosition([xCenter, yCenter]);
+        else
+            fcn=myPositionConstraint(handles);
+            handles.centerPoint=impoint(handles.axes1, xCenter, yCenter);
+            handles.centerPoint.setPositionConstraintFcn(fcn);
+            handles.centerPoint.Deletable=false;
+        end
+    end
+end
+
+
 guidata(handles.figure1,handles);
-
-
 
 
 %but_deselection_fct
@@ -389,7 +421,23 @@ function figure1_WindowButtonMotionFcn(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
   if (isAboveImage(handles))    
     cursor_coordinate_AND_Val_UpdateFcn(handles.cursor_coordinate, eventdata, handles);
-    %cursor_value_UpdateFcn(handles)
+    
+    if handles.show_selection_area.Value
+        tagCell={'lo_select_but','hi_select_but','lo_deselect_but','hi_deselect_but','star_select_but','star_deselect_but'};
+
+        for ii=1:6
+
+            eval(['H=handles.' tagCell{ii} ';']);
+
+            if get(H,'Value')
+                disp_pix_selection(handles);
+                break;
+            end
+        end 
+    end
+  else      
+      handles.image.cyan.AlphaData = handles.image.currentSelect; %clears pixel selection layer
+      drawnow;
  end
 %}
 % CP= get(handles.axes1,'CurrentPoint');
@@ -474,15 +522,21 @@ CP= get(handles.axes1,'CurrentPoint');
     
    
 pixelsWithInRad = findCirclePixels( handles.image.size, [Y_CP,X_CP], 0, pixel_selection_delta); 
-
+if isempty(pixelsWithInRad)
+    return; 
+end
 
 for kk=1:size(pixelsWithInRad,1)
-    if jj<3 %select low selec mask
-        handles.image.loSelect( pixelsWithInRad(kk,1), pixelsWithInRad(kk,2) ) = logical(mod(jj,2));
-    elseif jj<5 %select hi selec mask
-        handles.image.hiSelect( pixelsWithInRad(kk,1), pixelsWithInRad(kk,2) ) = logical(mod(jj,2));
-    elseif jj<7 %select star selec mask
-        handles.image.starSelect( pixelsWithInRad(kk,1), pixelsWithInRad(kk,2) ) = logical(mod(jj,2));
+    if isnan(pixelsWithInRad(kk,1))
+        break;
+    else
+        if jj<3 %select low selec mask
+            handles.image.loSelect( pixelsWithInRad(kk,1), pixelsWithInRad(kk,2) ) = logical(mod(jj,2));
+        elseif jj<5 %select hi selec mask
+            handles.image.hiSelect( pixelsWithInRad(kk,1), pixelsWithInRad(kk,2) ) = logical(mod(jj,2));
+        elseif jj<7 %select star selec mask
+            handles.image.starSelect( pixelsWithInRad(kk,1), pixelsWithInRad(kk,2) ) = logical(mod(jj,2));
+        end
     end
 end
 
@@ -593,9 +647,6 @@ sel_calc_thresh_Callback(handles.sel_calc_thresh, eventdata, handles);
  
 
 
-% Hint: get(hObject,'Value') returns toggle state of thresh_calc_but
-
-
 % --- Executes on button press in sel_calc_thresh.
 function sel_calc_thresh_Callback(hObject, eventdata, handles)
 % hObject    handle to sel_calc_thresh (see GCBO)
@@ -606,6 +657,7 @@ set(handles.sel_user_thresh,'Value',0);
 set(handles.enter_threshold, 'Enable', 'inactive');
 set(handles.enter_threshold, 'String', num2str(handles.calculated.thresh));
 
+update_thresh_lo_hi_to_sigma_text(handles)
 % Hint: get(hObject,'Value') returns toggle state of sel_calc_thresh
 
 
@@ -618,6 +670,8 @@ set(handles.sel_user_thresh,'Value',1);
 set(handles.sel_calc_thresh,'Value',0);
 set(handles.enter_threshold, 'Enable', 'on');
 set(handles.enter_threshold, 'String', handles.userInput.thresholdStr);
+
+update_thresh_lo_hi_to_sigma_text(handles)
 % Hint: get(hObject,'Value') returns toggle state of sel_user_thresh
 
 
@@ -653,4 +707,59 @@ function enter_thresh_percent_CreateFcn(hObject, eventdata, handles)
 %       See ISPC and COMPUTER.
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
+end
+
+
+function update_thresh_lo_hi_to_sigma_text(handles)
+
+currentThresh = str2double(handles.enter_threshold.String);
+
+thresh_minus_lo_in_sigma= (currentThresh - handles.calculated.lo_mean)/handles.calculated.lo_std;
+hi_minus_thresh_in_sigma= (handles.calculated.hi_mean-currentThresh)/handles.calculated.hi_std;
+
+lo_thresh_to_sig_conv_txt=['thresh - low  =  ' num2str(round(thresh_minus_lo_in_sigma*10)/10,2)];
+handles.lo_thresh_to_sig_conv_txt.String=lo_thresh_to_sig_conv_txt;
+
+hi_thresh_to_sig_conv_txt=['high - thresh =  ' num2str(round(hi_minus_thresh_in_sigma*10)/10,2)];
+handles.hi_thresh_to_sig_conv_txt.String=hi_thresh_to_sig_conv_txt;
+
+
+% --- Executes on button press in show_center_chkBox.
+function show_center_chkBox_Callback(hObject, eventdata, handles)
+% hObject    handle to show_center_chkBox (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+if not(hObject.Value)&&isfield(handles, 'centerPoint')
+    handles.centerPoint.Deletable=true;
+    handles.centerPoint.delete;
+    handles=rmfield(handles, 'centerPoint');
+    guidata(handles.figure1,handles);
+elseif ( isfield(handles.calculated, 'xCenter') && isfield(handles.calculated, 'yCenter') )
+            
+    %setPosition(handles.centerPoint, [xCenter, yCenter]);
+    xCenter=handles.calculated.xCenter;
+    yCenter=handles.calculated.yCenter;
+    fcn=myPositionConstraint(handles);
+    handles.centerPoint=impoint(handles.axes1, xCenter, yCenter);
+    handles.centerPoint.setPositionConstraintFcn(fcn);
+    handles.centerPoint.Deletable=false;
+    guidata(handles.figure1,handles);
+    %is this necessary?
+end
+
+
+
+
+% Hint: get(hObject,'Value') returns toggle state of show_center_chkBox
+
+
+% --- Executes during object creation, after setting all properties.
+function show_center_chkBox_CreateFcn(hObject, eventdata, handles)
+
+status = license('test','Image_Toolbox');
+
+if status
+    hObject.Value=1;
+else
+    hObject.delete;
 end
