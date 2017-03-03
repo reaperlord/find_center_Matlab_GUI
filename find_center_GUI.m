@@ -22,7 +22,7 @@ function varargout = find_center_GUI(varargin)
 
 % Edit the above text to modify the response to help find_center_GUI
 
-% Last Modified by GUIDE v2.5 01-Mar-2017 11:41:02
+% Last Modified by GUIDE v2.5 01-Mar-2017 18:51:08
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -122,6 +122,11 @@ handles.image.cyan.AlphaData = handles.image.currentSelect;
 handles.userInput.thresholdStr='threshold';
 handles.userInput.thresh_percentStr='30';
 
+handles.userInput.point1.X=NaN;
+handles.userInput.point1.Y=NaN;
+handles.userInput.point2.X=NaN;
+handles.userInput.point2.Y=NaN;
+
 %initialize calculated
 handles.calculated.lo_mean=NaN;
 handles.calculated.lo_std=NaN;
@@ -130,6 +135,22 @@ handles.calculated.hi_std=NaN;
 handles.calculated.thresh=NaN;
 handles.calculated.xCenter=NaN;
 handles.calculated.yCenter=NaN;
+
+%initialize impoints
+handles.pt1=[];
+handles.pt2=[];
+
+%initialize Flags
+handles.flags.waitingOnPointPlacement=0;
+
+%Initialize java  
+import java.awt.Robot;
+%import java.awt.event.*;
+
+    %Initialize robot
+    handles.robot=Robot;
+
+
 
 % Choose default command line output for find_center_GUI
 handles.output = hObject;
@@ -174,7 +195,7 @@ function lo_select_but_Callback(hObject, eventdata, handles)
 % hObject    handle to lo_select_but (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-but_deselection_fct(hObject,handles);
+but_deselection_fct(handles,hObject);
 % Hint: get(hObject,'Value') returns toggle state of lo_select_but
 
 
@@ -183,10 +204,11 @@ function lo_deselect_but_Callback(hObject, eventdata, handles)
 % hObject    handle to lo_deselect_but (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-but_deselection_fct(hObject,handles);
+but_deselection_fct(handles,hObject);
 % Hint: get(hObject,'Value') returns toggle state of lo_deselect_but
 
-
+%{
+%%%%%%%%%%%%%%%%%%%%to DELETE
 % --- Executes on button press in checkbox2.
 function checkbox2_Callback(hObject, eventdata, handles)
 % hObject    handle to checkbox2 (see GCBO)
@@ -230,7 +252,8 @@ function togglebutton6_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 % Hint: get(hObject,'Value') returns toggle state of togglebutton6
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%}
 
 % --- Executes on button press in togglebutton7.
 function togglebutton7_Callback(hObject, eventdata, handles)
@@ -329,7 +352,7 @@ function hi_select_but_Callback(hObject, eventdata, handles)
 % hObject    handle to hi_select_but (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-but_deselection_fct(hObject,handles);
+but_deselection_fct(handles,hObject);
 % Hint: get(hObject,'Value') returns toggle state of hi_select_but
 
 
@@ -338,7 +361,7 @@ function hi_deselect_but_Callback(hObject, eventdata, handles)
 % hObject    handle to hi_deselect_but (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-but_deselection_fct(hObject,handles);
+but_deselection_fct(handles,hObject);
 % Hint: get(hObject,'Value') returns toggle state of hi_deselect_but
 
 
@@ -347,7 +370,7 @@ function star_select_but_Callback(hObject, eventdata, handles)
 % hObject    handle to star_select_but (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-but_deselection_fct(hObject,handles);
+but_deselection_fct(handles,hObject);
 % Hint: get(hObject,'Value') returns toggle state of star_select_but
 
 
@@ -356,7 +379,7 @@ function star_deselect_but_Callback(hObject, eventdata, handles)
 % hObject    handle to star_deselect_but (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-but_deselection_fct(hObject,handles);
+but_deselection_fct(handles,hObject);
 % Hint: get(hObject,'Value') returns toggle state of star_deselect_but
 
 
@@ -373,7 +396,7 @@ handles.calculated.yCenter=yCenter;
 
 handles.center_disp_text.String=['[' num2str(round(xCenter*100)/100) ',' num2str(round(yCenter*100)/100) ']'];
 
-    
+getDistanceBtwnPoints(handles.figure1);    
 
 
 %should an impoint be created to display center?
@@ -391,6 +414,8 @@ if status %check whether show center is switched on?
             handles.centerPoint=impoint(handles.axes1, xCenter, yCenter);
             handles.centerPoint.setPositionConstraintFcn(fcn);
             handles.centerPoint.Deletable=false;
+            set(handles.centerPoint, 'HitTest', 'off');
+            handles.centerPoint.setColor('red');    
         end
     end
 end
@@ -400,18 +425,21 @@ guidata(handles.figure1,handles);
 
 
 %but_deselection_fct
-function but_deselection_fct(hObject, handles)
+function but_deselection_fct(handles, varargin)
 
-tagCell={'lo_select_but','hi_select_but','lo_deselect_but','hi_deselect_but','star_select_but','star_deselect_but'};
+tagCell={'lo_select_but','hi_select_but','lo_deselect_but','hi_deselect_but','star_select_but','star_deselect_but', 'pt1_but', 'pt2_but'};
 
-for ii=1:6
+for ii=1:8
     
 eval(['H=handles.' tagCell{ii} ';']);
     
-if ne(H,hObject)
-set(H,'Value', get(H,'Min')) 
+if nargin<2 || ne(H,varargin{1})
+    set(H,'Value', get(H,'Min'))
 end
 end
+
+handles.image.cyan.AlphaData = handles.image.currentSelect; %clears pixel selection layer
+drawnow;
 
 
 % --- Executes on mouse motion over figure - except title and menu.
@@ -747,6 +775,7 @@ elseif ( isfield(handles.calculated, 'xCenter') && isfield(handles.calculated, '
     %is this necessary?
 end
 
+getDistanceBtwnPoints(handles.figure1);
 
 
 
@@ -761,5 +790,192 @@ status = license('test','Image_Toolbox');
 if status
     hObject.Value=1;
 else
-    hObject.delete;
+    hObject.Value=0;
+    hObject.Enable='off';
 end
+
+% --- Executes during object creation, after setting all properties.
+function imToolBox_dependent_Elements_CreateFcn(hObject, eventdata, handles)
+
+status =license('test','Image_Toolbox');
+
+if status
+    hObject.Enable='on';
+else
+    hObject.Enable='off';
+end
+
+
+
+
+
+% --- Executes on key press with focus on figure1 or any of its controls.
+function figure1_WindowKeyPressFcn(hObject, eventdata, handles)
+% hObject    handle to figure1 (see GCBO)
+% eventdata  structure with the following fields (see MATLAB.UI.FIGURE)
+%	Key: name of the key that was pressed, in lower case
+%	Character: character interpretation of the key(s) that was pressed
+%	Modifier: name(s) of the modifier key(s) (i.e., control, shift) pressed
+% handles    structure with handles and user data (see GUIDATA)
+if strcmp(eventdata.Key,'escape')
+   but_deselection_fct(handles);
+end
+
+
+% --- Executes on button press in use_cntr_chkbox.
+function use_cntr_chkbox_Callback(hObject, eventdata, handles)
+% hObject    handle to use_cntr_chkbox (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+if hObject.Value
+    handles.pt2_but.Enable='off';
+
+    if not(isempty(handles.pt2))
+        set(handles.pt2, 'Visible','off')
+    end
+    %and kill point if it exists
+else
+   handles.pt2_but.Enable='on';
+   
+   if not(isempty(handles.pt2))
+        set(handles.pt2, 'Visible','on')
+    end
+   %and remake point if it existed 
+end
+
+getDistanceBtwnPoints(handles.figure1);
+% Hint: get(hObject,'Value') returns toggle state of use_cntr_chkbox
+
+
+% --- Executes on button press in pt2_but.
+function pt2_but_Callback(hObject, eventdata, handles)
+% hObject    handle to pt2_but (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+if handles.flags.waitingOnPointPlacement
+    hObject.Value=0;
+    
+    if handles.flags.waitingOnPointPlacement==2
+    import java.awt.event.*;    
+    handles.robot.keyPress(KeyEvent.VK_ESCAPE)
+    handles.robot.keyRelease(KeyEvent.VK_ESCAPE)  
+    end
+        
+    return;
+end
+
+but_deselection_fct(handles,hObject);
+
+hObject.Value=1;
+
+
+handles.flags.waitingOnPointPlacement=2;
+guidata(handles.figure1,handles);
+
+posCalBack = @(impointPos) getDistanceBtwnPoints(handles.figure1, impointPos,2);
+
+
+    currentPoint=impoint;
+%{
+    catch
+    %}
+    
+ if isempty(currentPoint)   
+    %'err pt2'
+    handles.flags.waitingOnPointPlacement=0;
+    hObject.Value=0;
+    guidata(handles.figure1,handles);
+    %currentPoint.resume;
+    return;
+end
+    %}
+
+%currentPoint.set('BusyAction', 'cancel');
+currentPoint.addNewPositionCallback(posCalBack);
+currentPoint.setColor('green'); 
+curMenu=get(currentPoint,'UIContextMenu');
+curMenu.delete;
+
+if isempty(handles.pt2)
+    handles.pt2=currentPoint;
+else
+    oldPoint=handles.pt2;
+    handles.pt2=currentPoint;
+    oldPoint.delete;
+end
+
+handles.flags.waitingOnPointPlacement=0;
+guidata(handles.figure1,handles);
+hObject.Value=0;
+
+if isempty(handles.pt1)
+    pt1_but_Callback(handles.pt1_but, eventdata, handles)
+end
+
+getDistanceBtwnPoints(handles.figure1);
+%update distance fct
+% Hint: get(hObject,'Value') returns toggle state of pt2_but
+
+
+% --- Executes on button press in pt1_but.
+function pt1_but_Callback(hObject, eventdata, handles)
+% hObject    handle to pt1_but (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+if handles.flags.waitingOnPointPlacement
+    hObject.Value=0;
+    
+    if handles.flags.waitingOnPointPlacement==1
+    import java.awt.event.*;    
+    handles.robot.keyPress(KeyEvent.VK_ESCAPE)
+    handles.robot.keyRelease(KeyEvent.VK_ESCAPE)  
+    end
+        
+    return;
+end
+
+but_deselection_fct(handles,hObject);
+
+hObject.Value=1;
+
+
+posCalBack = @(impointPos) getDistanceBtwnPoints(handles.figure1, impointPos,1);
+
+handles.flags.waitingOnPointPlacement=1;
+guidata(handles.figure1,handles);
+
+%try
+    currentPoint=impoint;
+
+if isempty(currentPoint)
+    %'err pt1'
+    handles.flags.waitingOnPointPlacement=0;
+    hObject.Value=0;
+    guidata(handles.figure1,handles);
+    return;
+end
+    %}
+%currentPoint.set('BusyAction', 'cancel');
+currentPoint.addNewPositionCallback(posCalBack);
+currentPoint.setColor('green'); 
+curMenu=get(currentPoint,'UIContextMenu');
+curMenu.delete;
+
+if isempty(handles.pt1)
+    handles.pt1=currentPoint;
+else
+    oldPoint=handles.pt1;
+    handles.pt1=currentPoint;
+    oldPoint.delete;
+end
+
+handles.flags.waitingOnPointPlacement=0;
+guidata(handles.figure1,handles);
+hObject.Value=0;
+
+if isempty(handles.pt2)&& not(handles.use_cntr_chkbox.Value)
+    pt2_but_Callback(handles.pt2_but, eventdata, handles)
+end
+
+getDistanceBtwnPoints(handles.figure1);
+%update distance fct
